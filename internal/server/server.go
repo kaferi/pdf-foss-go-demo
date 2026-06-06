@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
 	"pdf-foss-demo/internal/renderer"
@@ -23,6 +25,11 @@ func New(s *storage.Store, r *renderer.Renderer, webDir string) *Server {
 	srv := &Server{store: s, renderer: r, mux: http.NewServeMux()}
 	srv.mux.HandleFunc("GET /api/files", srv.handleListFiles)
 	srv.mux.HandleFunc("POST /api/upload", srv.handleUpload)
+	srv.mux.HandleFunc("GET /api/files/{id}", srv.handleFileMeta)
+	srv.mux.HandleFunc("POST /api/files/{id}/render", srv.handleRender)
+	srv.mux.HandleFunc("DELETE /api/files/{id}", srv.handleDelete)
+	srv.mux.HandleFunc("GET /files/{id}/original.pdf", srv.handleOriginal)
+	srv.mux.HandleFunc("GET /files/{id}/pages/{n}", srv.handlePagePNG)
 	srv.mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.Dir(webDir+"/static"))))
 	return srv
@@ -82,4 +89,69 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		files = []storage.Meta{}
 	}
 	writeJSON(w, http.StatusOK, files)
+}
+
+func (s *Server) handleFileMeta(w http.ResponseWriter, r *http.Request) {
+	m, err := s.store.ReadMeta(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.store.ReadMeta(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.renderer.Render(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	m, _ := s.store.ReadMeta(id)
+	writeJSON(w, http.StatusOK, m) // status may be "ready" or "error"
+}
+
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.store.ReadMeta(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.store.Delete(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleOriginal(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	m, err := s.store.ReadMeta(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+m.OriginalName+"\"")
+	http.ServeFile(w, r, s.store.OriginalPath(id))
+}
+
+func (s *Server) handlePagePNG(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	nStr := strings.TrimSuffix(r.PathValue("n"), ".png")
+	n, err := strconv.Atoi(nStr)
+	if err != nil || n < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	path := s.store.PagePNGPath(id, n)
+	if _, err := os.Stat(path); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	http.ServeFile(w, r, path)
 }

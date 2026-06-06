@@ -85,3 +85,60 @@ func TestListFilesJSON(t *testing.T) {
 		t.Fatalf("body = %s", w.Body.String())
 	}
 }
+
+func TestMetaStatusAndDelete(t *testing.T) {
+	srv, s := newTestServer(t)
+	id, _ := s.CreateUpload("a.pdf", []byte("%PDF-1.7 x"))
+
+	// status endpoint
+	req := httptest.NewRequest(http.MethodGet, "/api/files/"+id, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("status code = %d", w.Code)
+	}
+	var m storage.Meta
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil || m.ID != id {
+		t.Fatalf("meta body = %s", w.Body.String())
+	}
+
+	// original download
+	req = httptest.NewRequest(http.MethodGet, "/files/"+id+"/original.pdf", nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 200 || w.Body.Len() == 0 {
+		t.Fatalf("original code=%d len=%d", w.Code, w.Body.Len())
+	}
+
+	// delete
+	req = httptest.NewRequest(http.MethodDelete, "/api/files/"+id, nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 204 {
+		t.Fatalf("delete code = %d", w.Code)
+	}
+	if _, err := s.ReadMeta(id); err == nil {
+		t.Fatal("expected file gone")
+	}
+}
+
+func TestUnknownFile404(t *testing.T) {
+	srv, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/files/doesnotexist", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("code = %d", w.Code)
+	}
+}
+
+func TestPagePNGMissing404(t *testing.T) {
+	srv, s := newTestServer(t)
+	id, _ := s.CreateUpload("a.pdf", []byte("%PDF-1.7 x"))
+	req := httptest.NewRequest(http.MethodGet, "/files/"+id+"/pages/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("code=%d", w.Code)
+	}
+}
