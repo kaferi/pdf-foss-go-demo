@@ -16,7 +16,10 @@ func makePDF(t *testing.T) []byte {
 	if err := doc.AddBlankPageFromFormat(asposepdf.PageFormatA4); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := doc.Page(1)
+	p, err := doc.Page(1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := p.AddText("Hello page 1", asposepdf.TextStyle{Size: 24},
 		asposepdf.Rectangle{LLX: 50, LLY: 700, URX: 545, URY: 760}); err != nil {
 		t.Fatal(err)

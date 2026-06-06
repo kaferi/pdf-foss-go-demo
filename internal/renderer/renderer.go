@@ -37,6 +37,8 @@ func (r *Renderer) Render(id string) error {
 	if m.Status == storage.StatusReady {
 		return nil
 	}
+	// A previous StatusError is intentionally NOT a skip-condition: re-triggering
+	// a render on a file that failed before is useful for reproducing library bugs.
 
 	r.sem <- struct{}{}
 	defer func() { <-r.sem }()
@@ -69,10 +71,15 @@ func (r *Renderer) Render(id string) error {
 // renderAllPages opens the document and writes one PNG per page. Any panic from
 // the library is recovered and returned as a *storage.RenderError with a stack.
 func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.RenderError) {
+	// stage tracks the current phase so a recovered panic is attributed to the
+	// library call that actually faulted (parse vs render), not always "render".
+	stage := "parse"
+	panicPage := 0
 	defer func() {
 		if rec := recover(); rec != nil {
 			rerr = &storage.RenderError{
-				Stage:   "render",
+				Stage:   stage,
+				Page:    panicPage,
 				Message: fmt.Sprintf("panic: %v\n%s", rec, debug.Stack()),
 			}
 		}
@@ -82,6 +89,7 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 	if err != nil {
 		return &storage.RenderError{Stage: "parse", Message: err.Error()}
 	}
+	stage = "render"
 
 	pages := doc.PageCount()
 	m.Pages = pages
@@ -91,6 +99,7 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 	}
 
 	for n := 1; n <= pages; n++ {
+		panicPage = n // so a panic inside the loop is attributed to this page
 		page, err := doc.Page(n)
 		if err != nil {
 			return &storage.RenderError{Stage: "render", Page: n, Message: err.Error()}
