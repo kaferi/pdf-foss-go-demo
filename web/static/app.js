@@ -6,20 +6,34 @@ async function initHome() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = document.getElementById('file');
-    if (!input.files.length) return;
-    const fd = new FormData();
-    fd.append('file', input.files[0]);
-    msg.textContent = 'Uploading…';
-    msg.className = 'msg';
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
-    if (!res.ok) {
-      msg.textContent = 'Upload failed: ' + (await res.text());
-      msg.className = 'msg error';
-      return;
+    const files = Array.from(input.files);
+    if (!files.length) return;
+
+    const failures = [];
+    for (let i = 0; i < files.length; i++) {
+      msg.className = 'msg';
+      msg.textContent = `Uploading ${i + 1} of ${files.length}: ${files[i].name}…`;
+      const fd = new FormData();
+      fd.append('file', files[i]);
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!res.ok) failures.push(`${files[i].name}: ${(await res.text()).trim()}`);
+      } catch (err) {
+        failures.push(`${files[i].name}: ${err}`);
+      }
+      await loadFiles(); // refresh list as each file lands
     }
-    msg.textContent = 'Uploaded.';
+
+    const ok = files.length - failures.length;
+    if (failures.length) {
+      msg.className = 'msg error';
+      msg.textContent =
+        `Uploaded ${ok} of ${files.length}. Failed:\n` + failures.join('\n');
+    } else {
+      msg.className = 'msg';
+      msg.textContent = `Uploaded ${ok} file${ok === 1 ? '' : 's'}.`;
+    }
     input.value = '';
-    await loadFiles();
   });
   await loadFiles();
 }
@@ -72,7 +86,7 @@ async function initViewer() {
   }
 
   if (meta.status === 'error') { showError(statusEl, meta); return; }
-  if (meta.status === 'ready') { statusEl.textContent = ''; renderPages(id, meta.pages); }
+  if (meta.status === 'ready') { statusEl.textContent = ''; renderPages(id, meta); }
 }
 
 async function pollUntilDone(id, statusEl) {
@@ -88,15 +102,25 @@ async function pollUntilDone(id, statusEl) {
   }
 }
 
-function renderPages(id, pages) {
+function renderPages(id, meta) {
   const wrap = document.getElementById('pages');
-  for (let n = 1; n <= pages; n++) {
+  const total = meta.pages || 0;
+  // renderedPages was added later; for older "ready" records that predate it,
+  // fall back to the total page count.
+  const shown = meta.renderedPages || total;
+  for (let n = 1; n <= shown; n++) {
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.className = 'page';
     img.alt = 'Page ' + n;
     img.src = `/files/${id}/pages/${n}`;
     wrap.appendChild(img);
+  }
+  if (total > shown) {
+    const note = document.createElement('p');
+    note.className = 'page-note';
+    note.textContent = `Showing the first ${shown} of ${total} pages.`;
+    wrap.appendChild(note);
   }
 }
 

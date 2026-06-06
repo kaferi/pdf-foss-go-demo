@@ -30,3 +30,4 @@ button:hover { background: #ececec; }
 .status.error pre { white-space: pre-wrap; background: #f6f6f6; padding: .75rem; border-radius: 6px; overflow: auto; }
 .pages { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1rem; }
 .page { max-width: 900px; width: 100%; height: auto; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
+.page-note { color: #ddd; font-size: .9rem; padding: .5rem 1rem 1.5rem; }
