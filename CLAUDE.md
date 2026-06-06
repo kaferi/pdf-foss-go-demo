@@ -54,9 +54,34 @@ tag) because raster rendering (`Page.RenderPNG` / `Page.RenderImage`) exists in
 ## Conventions
 
 - Keep this file up to date as the design and code evolve.
-- Git repo is created by the user — do not run `git init`.
 - `.gitignore` and `.dockerignore` are maintained in the repo root.
 
-## Specs
+## Run / build
 
-Design specs live in `docs/superpowers/specs/`.
+- Local: `go run .` — env vars `DATA_DIR` (default `/data`), `WEB_DIR`
+  (default `web`), `ADDR` (default `:8080`). On Windows for a local run use a
+  writable data dir, e.g. PowerShell:
+  `$env:DATA_DIR='./_data'; $env:ADDR=':8080'; go run .`
+- Tests: `go test ./...`.
+- Static linux build (what Docker uses): `CGO_ENABLED=0 GOOS=linux go build .`
+  — the library is pure Go, no cgo.
+- Docker:
+  `docker build -t pdf-foss-demo .` then
+  `docker run --rm -p 8080:8080 -v pdf_demo_data:/data pdf-foss-demo`.
+
+## Layout
+
+- `internal/storage` — volume layout + `meta.json` IO (no PDF library).
+- `internal/renderer` — the ONLY package that opens PDFs with the library;
+  renders pages to PNG, serialized by a capacity-1 semaphore, recovers panics
+  into recorded errors.
+- `internal/server` — `net/http` handlers + static serving. `validID` guards
+  every `{id}` path against traversal.
+- `web/` — plain HTML/CSS/JS frontend (no build step). Page PNGs are served at
+  `/files/{id}/pages/{n}` (1-based, no `.png` extension).
+- `main.go` — wires storage → renderer → server.
+
+## Specs & plans
+
+Design specs live in `docs/superpowers/specs/`; implementation plans in
+`docs/superpowers/plans/`.
