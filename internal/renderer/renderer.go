@@ -34,7 +34,7 @@ func (r *Renderer) Render(id string) error {
 	if err != nil {
 		return err
 	}
-	if m.Status == storage.StatusReady {
+	if m.Status == storage.StatusReady || m.Status == storage.StatusRendering {
 		return nil
 	}
 	// A previous StatusError is intentionally NOT a skip-condition: re-triggering
@@ -47,7 +47,7 @@ func (r *Renderer) Render(id string) error {
 	if m, err = r.store.ReadMeta(id); err != nil {
 		return err
 	}
-	if m.Status == storage.StatusReady {
+	if m.Status == storage.StatusReady || m.Status == storage.StatusRendering {
 		return nil
 	}
 

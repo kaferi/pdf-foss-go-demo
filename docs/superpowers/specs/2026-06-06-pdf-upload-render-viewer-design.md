@@ -101,7 +101,7 @@ skips rendering. An `error` record stays in the list until manually deleted.
 | `POST` | `/api/files/{fileId}/render` | trigger render (idempotent; no-op if `ready`/`rendering`) |
 | `GET` | `/api/files/{fileId}` | JSON meta (status polling) |
 | `DELETE` | `/api/files/{fileId}` | remove `/data/<fileId>` |
-| `GET` | `/files/{fileId}/pages/{n}.png` | serve cached page PNG (404 if not rendered) |
+| `GET` | `/files/{fileId}/pages/{n}` | serve cached page PNG, 1-based n, no extension (404 if not rendered) |
 | `GET` | `/files/{fileId}/original.pdf` | download original (works for errored files) |
 | `GET` | `/static/*` | CSS/JS |
 

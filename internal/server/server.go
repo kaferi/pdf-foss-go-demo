@@ -183,8 +183,7 @@ func (s *Server) handlePagePNG(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	nStr := strings.TrimSuffix(r.PathValue("n"), ".png")
-	n, err := strconv.Atoi(nStr)
+	n, err := strconv.Atoi(r.PathValue("n"))
 	if err != nil || n < 1 {
 		http.NotFound(w, r)
 		return
