@@ -1,113 +1,134 @@
-// Plain JS, no framework. Talks to the Go JSON/PNG API.
+// Plain JS, no framework. Single-page master-detail UI over the Go JSON/PNG API.
 
-async function initHome() {
-  const form = document.getElementById('upload-form');
-  const msg = document.getElementById('upload-msg');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('file');
-    const files = Array.from(input.files);
-    if (!files.length) return;
+let currentId = null;     // file currently shown in the detail pane
+let pollTimer = null;     // active status poll, cancelled when selection changes
 
-    const failures = [];
-    for (let i = 0; i < files.length; i++) {
-      msg.className = 'msg';
-      msg.textContent = `Uploading ${i + 1} of ${files.length}: ${files[i].name}…`;
-      const fd = new FormData();
-      fd.append('file', files[i]);
-      try {
-        const res = await fetch('/api/upload', { method: 'POST', body: fd });
-        if (!res.ok) failures.push(`${files[i].name}: ${(await res.text()).trim()}`);
-      } catch (err) {
-        failures.push(`${files[i].name}: ${err}`);
-      }
-      await loadFiles(); // refresh list as each file lands
-    }
+async function initApp() {
+  const btn = document.getElementById('upload-btn');
+  const input = document.getElementById('file-input');
+  btn.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => uploadFiles(Array.from(input.files)));
 
-    const ok = files.length - failures.length;
-    if (failures.length) {
-      msg.className = 'msg error';
-      msg.textContent =
-        `Uploaded ${ok} of ${files.length}. Failed:\n` + failures.join('\n');
-    } else {
-      msg.className = 'msg';
-      msg.textContent = `Uploaded ${ok} file${ok === 1 ? '' : 's'}.`;
-    }
-    input.value = '';
-  });
+  // Back/forward navigation between / and /view/{id}.
+  window.addEventListener('popstate', () => openFromLocation(false));
+
   await loadFiles();
+  openFromLocation(false); // open a deep-linked /view/{id} if present
 }
+
+/* ---------------- file list (sidebar) ---------------- */
 
 async function loadFiles() {
   const list = document.getElementById('file-list');
-  const res = await fetch('/api/files');
-  const files = await res.json();
+  let files = [];
+  try { files = await (await fetch('/api/files')).json(); } catch { /* keep empty */ }
+
   list.innerHTML = '';
   if (!files.length) {
-    list.innerHTML = '<li class="empty">No files yet.</li>';
+    list.innerHTML = '<li class="empty">No files yet. Click “+ Upload”.</li>';
     return;
   }
   for (const f of files) {
     const li = document.createElement('li');
-    const pages = f.pages ? ` · ${f.pages} pages` : '';
-    li.innerHTML =
-      `<a href="/view/${f.id}">${escapeHtml(f.originalName)}</a>` +
-      `<span class="badge ${f.status}">${f.status}</span>` +
-      `<span class="meta">${(f.size/1024).toFixed(0)} KB${pages}</span>` +
-      `<button data-id="${f.id}" class="del">Delete</button>`;
-    li.querySelector('.del').addEventListener('click', async () => {
+    const card = document.createElement('div');
+    card.className = 'file-card' + (f.id === currentId ? ' active' : '');
+    card.dataset.id = f.id;
+
+    const pages = f.pages ? ` · ${f.pages}p` : '';
+    card.innerHTML =
+      `<span class="file-name">${escapeHtml(f.originalName)}</span>` +
+      `<span class="file-sub">` +
+        `<span class="badge ${f.status}">${f.status}</span>` +
+        `<span>${(f.size / 1024).toFixed(0)} KB${pages}</span>` +
+      `</span>` +
+      `<button class="del" title="Delete" aria-label="Delete">×</button>`;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.classList.contains('del')) return; // handled below
+      selectFile(f.id, true);
+    });
+    card.querySelector('.del').addEventListener('click', async (e) => {
+      e.stopPropagation();
       await fetch('/api/files/' + f.id, { method: 'DELETE' });
+      if (f.id === currentId) { currentId = null; showPlaceholder(); navigate('/'); }
       await loadFiles();
     });
+
+    li.appendChild(card);
     list.appendChild(li);
   }
 }
 
-function fileIdFromPath() {
-  const m = location.pathname.match(/\/view\/([^/]+)/);
-  return m ? m[1] : '';
+function markActive(id) {
+  document.querySelectorAll('.file-card').forEach(c =>
+    c.classList.toggle('active', c.dataset.id === id));
 }
 
-async function initViewer() {
-  const id = fileIdFromPath();
-  document.getElementById('download').href = `/files/${id}/original.pdf`;
-  const statusEl = document.getElementById('status');
+/* ---------------- selection + detail pane ---------------- */
 
-  let meta = await (await fetch('/api/files/' + id)).json().catch(() => null);
-  if (!meta || !meta.id) { statusEl.textContent = 'File not found.'; return; }
-  document.getElementById('title').textContent = meta.originalName;
+function openFromLocation(push) {
+  const m = location.pathname.match(/^\/view\/([^/]+)/);
+  if (m) selectFile(m[1], push);
+  else { currentId = null; markActive(null); showPlaceholder(); }
+}
+
+async function selectFile(id, push) {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  currentId = id;
+  markActive(id);
+  if (push) navigate('/view/' + id);
+
+  setDownload(id);
+  let meta;
+  try { meta = await (await fetch('/api/files/' + id)).json(); }
+  catch { setTitle('Not found'); showStatus('File not found.'); return; }
+  if (!meta || !meta.id) { setTitle('Not found'); showStatus('File not found.'); return; }
+  if (id !== currentId) return; // selection changed while awaiting
+
+  setTitle(meta.originalName);
 
   if (meta.status === 'uploaded') {
-    statusEl.textContent = 'Starting render…';
-    fetch('/api/files/' + id + '/render', { method: 'POST' }); // fire and poll
-    meta = await pollUntilDone(id, statusEl);
+    showSpinner('Starting render…');
+    fetch('/api/files/' + id + '/render', { method: 'POST' }); // fire, then poll
+    pollUntilDone(id);
   } else if (meta.status === 'rendering') {
-    meta = await pollUntilDone(id, statusEl);
+    showSpinner('Rendering…');
+    pollUntilDone(id);
+  } else {
+    applyTerminal(id, meta);
   }
-
-  if (meta.status === 'error') { showError(statusEl, meta); return; }
-  if (meta.status === 'ready') { statusEl.textContent = ''; renderPages(id, meta); }
 }
 
-async function pollUntilDone(id, statusEl) {
-  for (;;) {
-    await new Promise(r => setTimeout(r, 700));
-    const m = await (await fetch('/api/files/' + id)).json();
+function pollUntilDone(id) {
+  pollTimer = setTimeout(async () => {
+    if (id !== currentId) return;
+    let m;
+    try { m = await (await fetch('/api/files/' + id)).json(); } catch { pollUntilDone(id); return; }
+    if (id !== currentId) return;
     if (m.status === 'rendering' || m.status === 'uploaded') {
-      statusEl.textContent = m.pages
-        ? `Rendering… (${m.pages} pages)` : 'Rendering…';
-      continue;
+      showSpinner(m.pages ? `Rendering… (${m.pages} pages)` : 'Rendering…');
+      pollUntilDone(id);
+      return;
     }
-    return m; // ready or error
-  }
+    applyTerminal(id, m);
+    loadFiles(); // refresh the badge in the list
+  }, 700);
+}
+
+function applyTerminal(id, meta) {
+  if (meta.status === 'error') { showError(meta); return; }
+  if (meta.status === 'ready') { renderPages(id, meta); return; }
+  showStatus('Unexpected status: ' + meta.status);
 }
 
 function renderPages(id, meta) {
-  const wrap = document.getElementById('pages');
   const total = meta.pages || 0;
-  // renderedPages was added later; for older "ready" records that predate it,
-  // fall back to the total page count.
+  // renderedPages was added later; fall back to total for older "ready" records.
   const shown = meta.renderedPages || total;
+  const body = document.getElementById('detail-body');
+  body.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'pages';
   for (let n = 1; n <= shown; n++) {
     const img = document.createElement('img');
     img.loading = 'lazy';
@@ -122,17 +143,76 @@ function renderPages(id, meta) {
     note.textContent = `Showing the first ${shown} of ${total} pages.`;
     wrap.appendChild(note);
   }
+  body.appendChild(wrap);
 }
 
-function showError(statusEl, meta) {
+function showError(meta) {
   const e = meta.error || {};
-  statusEl.className = 'status error';
-  statusEl.innerHTML =
-    `<h2>Render failed</h2>` +
-    `<p><b>Stage:</b> ${escapeHtml(e.stage || '?')}` +
-    (e.page ? ` · <b>Page:</b> ${e.page}` : '') + `</p>` +
-    `<pre>${escapeHtml(e.message || '(no message)')}</pre>` +
-    `<p><a href="/files/${meta.id}/original.pdf">Download original PDF</a> to reproduce.</p>`;
+  const body = document.getElementById('detail-body');
+  body.innerHTML =
+    `<div class="error-panel">` +
+      `<h2>Render failed</h2>` +
+      `<p class="meta-line"><b>Stage:</b> ${escapeHtml(e.stage || '?')}` +
+      (e.page ? ` · <b>Page:</b> ${e.page}` : '') + `</p>` +
+      `<pre>${escapeHtml(e.message || '(no message)')}</pre>` +
+      `<p><a href="/files/${meta.id}/original.pdf">Download original PDF</a> to reproduce.</p>` +
+    `</div>`;
+}
+
+/* ---------------- upload ---------------- */
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  const msg = document.getElementById('upload-msg');
+  const failures = [];
+  for (let i = 0; i < files.length; i++) {
+    msg.className = 'upload-msg';
+    msg.textContent = `Uploading ${i + 1} of ${files.length}: ${files[i].name}…`;
+    const fd = new FormData();
+    fd.append('file', files[i]);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) failures.push(`${files[i].name}: ${(await res.text()).trim()}`);
+    } catch (err) {
+      failures.push(`${files[i].name}: ${err}`);
+    }
+    await loadFiles();
+  }
+  const ok = files.length - failures.length;
+  if (failures.length) {
+    msg.className = 'upload-msg error';
+    msg.textContent = `Uploaded ${ok} of ${files.length}. Failed:\n` + failures.join('\n');
+  } else {
+    msg.className = 'upload-msg';
+    msg.textContent = `Uploaded ${ok} file${ok === 1 ? '' : 's'}.`;
+  }
+  document.getElementById('file-input').value = '';
+}
+
+/* ---------------- small view helpers ---------------- */
+
+function navigate(path) {
+  if (location.pathname !== path) history.pushState(null, '', path);
+}
+function setTitle(t) { document.getElementById('doc-title').textContent = t; }
+function setDownload(id) {
+  const a = document.getElementById('download');
+  a.href = `/files/${id}/original.pdf`;
+  a.hidden = false;
+}
+function showPlaceholder() {
+  setTitle('Select a document');
+  document.getElementById('download').hidden = true;
+  document.getElementById('detail-body').innerHTML =
+    `<div class="placeholder"><p>Pick a file on the left, or upload a new PDF to render its pages.</p></div>`;
+}
+function showStatus(text) {
+  document.getElementById('detail-body').innerHTML =
+    `<div class="status"><p>${escapeHtml(text)}</p></div>`;
+}
+function showSpinner(text) {
+  document.getElementById('detail-body').innerHTML =
+    `<div class="status"><div><div class="spinner"></div><p>${escapeHtml(text)}</p></div></div>`;
 }
 
 function escapeHtml(s) {

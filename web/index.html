@@ -7,25 +7,36 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-  <header>
-    <h1>PDF demo</h1>
-    <p>Powered by <code>aspose-pdf-foss-for-go</code>. Upload a PDF, then open it to render every page to PNG.</p>
-  </header>
+  <div class="app">
+    <!-- Left: sidebar with upload + file list -->
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div class="brand">
+          <span class="brand-mark">PDF</span>
+          <span class="brand-name">aspose-pdf-foss</span>
+        </div>
+        <button id="upload-btn" class="btn-primary" type="button">+ Upload</button>
+        <input id="file-input" type="file" accept="application/pdf" multiple hidden>
+        <p id="upload-msg" class="upload-msg"></p>
+      </div>
+      <ul id="file-list" class="file-list"></ul>
+    </aside>
 
-  <section class="uploader">
-    <form id="upload-form">
-      <input type="file" id="file" name="file" accept="application/pdf" multiple required>
-      <button type="submit">Upload</button>
-    </form>
-    <p id="upload-msg" class="msg"></p>
-  </section>
-
-  <section>
-    <h2>Files</h2>
-    <ul id="file-list" class="file-list"></ul>
-  </section>
+    <!-- Right: render of the selected document -->
+    <main class="detail">
+      <header class="detail-head">
+        <span id="doc-title" class="doc-title">Select a document</span>
+        <a id="download" class="btn-ghost" href="#" hidden>Download original</a>
+      </header>
+      <div id="detail-body" class="detail-body">
+        <div id="empty" class="placeholder">
+          <p>Pick a file on the left, or upload a new PDF to render its pages.</p>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <script src="/static/app.js"></script>
-  <script>initHome();</script>
+  <script>initApp();</script>
 </body>
 </html>
