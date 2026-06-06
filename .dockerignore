@@ -1,0 +1,10 @@
+.git
+_data
+_smoke
+docs
+*.md
+*.test
+*.out
+Dockerfile
+.dockerignore
+.gitignore
