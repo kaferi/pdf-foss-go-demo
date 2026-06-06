@@ -58,3 +58,26 @@ func TestRenderReadyProducesPNGs(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderCorruptRecordsErrorAndKeepsOriginal(t *testing.T) {
+	s := storage.New(t.TempDir())
+	id, err := s.CreateUpload("broken.pdf", []byte("%PDF-1.7 not really a pdf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(s)
+	if err := r.Render(id); err != nil {
+		t.Fatalf("Render returned storage error: %v", err)
+	}
+	m, _ := s.ReadMeta(id)
+	if m.Status != storage.StatusError {
+		t.Fatalf("status = %q, want error", m.Status)
+	}
+	if m.Error == nil || m.Error.Message == "" {
+		t.Fatalf("expected error detail, got %+v", m.Error)
+	}
+	// original.pdf must still be present
+	if _, err := os.Stat(s.OriginalPath(id)); err != nil {
+		t.Fatalf("original was removed: %v", err)
+	}
+}
