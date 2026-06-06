@@ -3,8 +3,14 @@
 package storage
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
+	"time"
 )
 
 // Status values for a file's meta.json.
@@ -55,3 +61,85 @@ func (s *Store) PagesDir(id string) string { return filepath.Join(s.dir(id), "pa
 func (s *Store) PagePNGPath(id string, n int) string {
 	return filepath.Join(s.PagesDir(id), fmt.Sprintf("%04d.png", n))
 }
+
+// newID returns a filesystem-safe random id.
+func newID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// CreateUpload writes original.pdf FIRST, then a meta.json with status "uploaded".
+// It never opens the PDF with any library.
+func (s *Store) CreateUpload(originalName string, data []byte) (string, error) {
+	id, err := newID()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(s.dir(id), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(s.OriginalPath(id), data, 0o644); err != nil {
+		return "", err
+	}
+	m := Meta{
+		ID:           id,
+		OriginalName: originalName,
+		Size:         int64(len(data)),
+		UploadedAt:   time.Now().UTC().Format(time.RFC3339),
+		Status:       StatusUploaded,
+	}
+	if err := s.WriteMeta(m); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// WriteMeta persists m to its meta.json (overwriting any existing record).
+func (s *Store) WriteMeta(m Meta) error {
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.MetaPath(m.ID), b, 0o644)
+}
+
+// ReadMeta loads the meta.json for the given file ID.
+func (s *Store) ReadMeta(id string) (Meta, error) {
+	var m Meta
+	b, err := os.ReadFile(s.MetaPath(id))
+	if err != nil {
+		return m, err
+	}
+	return m, json.Unmarshal(b, &m)
+}
+
+// List scans /data/*/meta.json, newest upload first. Directories without a
+// readable meta.json are skipped.
+func (s *Store) List() ([]Meta, error) {
+	entries, err := os.ReadDir(s.Root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []Meta
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		m, err := s.ReadMeta(e.Name())
+		if err != nil {
+			continue // skip incomplete dirs
+		}
+		out = append(out, m)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UploadedAt > out[j].UploadedAt })
+	return out, nil
+}
+
+// Delete removes the entire directory for the given file ID.
+func (s *Store) Delete(id string) error { return os.RemoveAll(s.dir(id)) }
