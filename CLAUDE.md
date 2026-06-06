@@ -28,8 +28,15 @@ tag) because raster rendering (`Page.RenderPNG` / `Page.RenderImage`) exists in
   cannot afford to open them all in the library (memory).
 - **Rendering is a separate operation triggered by selecting a file from the
   list.** On selection the server opens the file with the library, gets
-  PageCount, renders ALL pages to PNG @150 DPI, caches them on the volume.
-  Re-opening a `ready` file is instant (PNGs already on disk).
+  PageCount, renders the first `maxRenderPages` (= 10) pages to PNG @150 DPI,
+  caches them on the volume. `meta.Pages` holds the full page count;
+  `meta.RenderedPages` holds how many were actually rasterized. The viewer shows
+  "Showing the first N of M pages" when capped. Re-opening a `ready` file is
+  instant (PNGs already on disk).
+- **Upload is multi-file.** The home form accepts multiple PDFs; the frontend
+  POSTs them to `/api/upload` one at a time (the endpoint still takes a single
+  file), shows per-file progress, refreshes the list as each lands, and reports
+  per-file failures without aborting the batch.
 - **One render at a time** (global semaphore = 1) — memory is the bottleneck;
   only one file is open in the library at any moment.
 - **Render UX:** selecting a file shows a "Rendering… (N pages)" page that polls
