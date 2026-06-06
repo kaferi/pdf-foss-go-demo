@@ -5,14 +5,26 @@ package server
 import (
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"pdf-foss-demo/internal/renderer"
 	"pdf-foss-demo/internal/storage"
 )
+
+// hexID matches the 32-hex-character file IDs produced by storage.newID.
+var hexID = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// validID reports whether id is a well-formed file ID. This is a security guard:
+// IDs arrive from the URL path and are joined into filesystem paths, so anything
+// that is not exactly a 32-char hex string (e.g. "..", a URL-encoded slash that
+// net/http decoded into the path value) must be rejected to prevent traversal
+// outside the data volume.
+func validID(id string) bool { return hexID.MatchString(id) }
 
 type Server struct {
 	store    *storage.Store
@@ -95,7 +107,12 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFileMeta(w http.ResponseWriter, r *http.Request) {
-	m, err := s.store.ReadMeta(r.PathValue("id"))
+	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	m, err := s.store.ReadMeta(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -105,6 +122,10 @@ func (s *Server) handleFileMeta(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
 	if _, err := s.store.ReadMeta(id); err != nil {
 		http.NotFound(w, r)
 		return
@@ -119,6 +140,10 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
 	if _, err := s.store.ReadMeta(id); err != nil {
 		http.NotFound(w, r)
 		return
@@ -132,18 +157,32 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOriginal(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
 	m, err := s.store.ReadMeta(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+m.OriginalName+"\"")
+	// FormatMediaType quotes/escapes the filename per RFC 6266, preventing header
+	// injection via crafted names (e.g. an embedded double-quote).
+	disp := mime.FormatMediaType("attachment", map[string]string{"filename": m.OriginalName})
+	if disp == "" {
+		disp = "attachment"
+	}
+	w.Header().Set("Content-Disposition", disp)
 	http.ServeFile(w, r, s.store.OriginalPath(id))
 }
 
 func (s *Server) handlePagePNG(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
 	nStr := strings.TrimSuffix(r.PathValue("n"), ".png")
 	n, err := strconv.Atoi(nStr)
 	if err != nil || n < 1 {

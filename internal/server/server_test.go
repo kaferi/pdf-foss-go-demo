@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"pdf-foss-demo/internal/renderer"
@@ -140,5 +141,52 @@ func TestPagePNGMissing404(t *testing.T) {
 	srv.ServeHTTP(w, req)
 	if w.Code != 404 {
 		t.Fatalf("code=%d", w.Code)
+	}
+}
+
+func TestHomeAndViewServeHTML(t *testing.T) {
+	srv, _ := newTestServer(t)
+	for _, path := range []string{"/", "/view/anything"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("%s code = %d", path, w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "<html") {
+			t.Fatalf("%s did not serve HTML: %s", path, w.Body.String())
+		}
+	}
+}
+
+// TestRenderUnknown404 covers the render trigger on a well-formed but
+// nonexistent id (completing endpoint coverage parity).
+func TestRenderUnknown404(t *testing.T) {
+	srv, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/files/"+strings.Repeat("a", 32)+"/render", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("code = %d", w.Code)
+	}
+}
+
+// TestPathTraversalRejected verifies that a crafted id containing an
+// (URL-encoded) path separator cannot escape the data volume. The DELETE path
+// is the dangerous one: without the validID guard it would remove an arbitrary
+// directory. We assert the request is rejected and the sibling dir survives.
+func TestPathTraversalRejected(t *testing.T) {
+	srv, s := newTestServer(t)
+	victim, _ := s.CreateUpload("victim.pdf", []byte("%PDF-1.7 keep me"))
+
+	// "..%2F<victim>" decodes to "../<victim>"; validID must reject it.
+	req := httptest.NewRequest(http.MethodDelete, "/api/files/..%2F"+victim, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("traversal delete code = %d, want 404", w.Code)
+	}
+	if _, err := s.ReadMeta(victim); err != nil {
+		t.Fatalf("victim dir was destroyed by traversal: %v", err)
 	}
 }
