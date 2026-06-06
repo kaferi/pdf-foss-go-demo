@@ -37,12 +37,21 @@ type Meta struct {
 // Store is rooted at the volume mount (e.g. /data).
 type Store struct{ Root string }
 
+// New returns a Store rooted at the given directory (typically the /data volume mount).
 func New(root string) *Store { return &Store{Root: root} }
 
-func (s *Store) dir(id string) string          { return filepath.Join(s.Root, id) }
+func (s *Store) dir(id string) string { return filepath.Join(s.Root, id) }
+
+// OriginalPath returns the path of the uploaded PDF for the given file ID.
 func (s *Store) OriginalPath(id string) string { return filepath.Join(s.dir(id), "original.pdf") }
-func (s *Store) MetaPath(id string) string     { return filepath.Join(s.dir(id), "meta.json") }
-func (s *Store) PagesDir(id string) string     { return filepath.Join(s.dir(id), "pages") }
+
+// MetaPath returns the path of the meta.json record for the given file ID.
+func (s *Store) MetaPath(id string) string { return filepath.Join(s.dir(id), "meta.json") }
+
+// PagesDir returns the directory holding the rendered page PNGs for the given file ID.
+func (s *Store) PagesDir(id string) string { return filepath.Join(s.dir(id), "pages") }
+
+// PagePNGPath returns the path of the rendered PNG for 1-based page n of the given file ID.
 func (s *Store) PagePNGPath(id string, n int) string {
 	return filepath.Join(s.PagesDir(id), fmt.Sprintf("%04d.png", n))
 }
