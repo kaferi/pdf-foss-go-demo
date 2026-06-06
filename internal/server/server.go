@@ -18,11 +18,14 @@ type Server struct {
 	store    *storage.Store
 	renderer *renderer.Renderer
 	mux      *http.ServeMux
+	webDir   string
 }
 
 // New builds the server. webDir is the path to the static frontend directory.
 func New(s *storage.Store, r *renderer.Renderer, webDir string) *Server {
-	srv := &Server{store: s, renderer: r, mux: http.NewServeMux()}
+	srv := &Server{store: s, renderer: r, mux: http.NewServeMux(), webDir: webDir}
+	srv.mux.HandleFunc("GET /{$}", srv.handleHome)
+	srv.mux.HandleFunc("GET /view/{id}", srv.handleView)
 	srv.mux.HandleFunc("GET /api/files", srv.handleListFiles)
 	srv.mux.HandleFunc("POST /api/upload", srv.handleUpload)
 	srv.mux.HandleFunc("GET /api/files/{id}", srv.handleFileMeta)
@@ -154,4 +157,12 @@ func (s *Server) handlePagePNG(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	http.ServeFile(w, r, path)
+}
+
+func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, s.webDir+"/index.html")
+}
+
+func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, s.webDir+"/view.html")
 }
