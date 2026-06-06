@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    image: pdf-foss-demo
+    ports:
+      - "8080:8080"
+    volumes:
+      # Bind-mount so the data is visible on the host (in ./data) via Explorer.
+      - ./data:/data
+    restart: unless-stopped

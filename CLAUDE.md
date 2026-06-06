@@ -72,9 +72,16 @@ tag) because raster rendering (`Page.RenderPNG` / `Page.RenderImage`) exists in
 - Tests: `go test ./...`.
 - Static linux build (what Docker uses): `CGO_ENABLED=0 GOOS=linux go build .`
   — the library is pure Go, no cgo.
-- Docker:
+- Docker Compose (preferred): `docker compose up -d --build`. Data is
+  bind-mounted to `./data` in the repo, so it is directly visible/editable from
+  the host (Windows Explorer at `…\pdf-foss-go-demo\data`). `./data` is
+  gitignored and dockerignored. Stop with `docker compose down`.
+- Docker (manual, named volume alternative):
   `docker build -t pdf-foss-demo .` then
   `docker run --rm -p 8080:8080 -v pdf_demo_data:/data pdf-foss-demo`.
+- Note: the container runs as nonroot (uid 65532). The bind-mount works on
+  Docker Desktop (Windows/WSL2) because host mounts are writable by the
+  container user; for named volumes the Dockerfile pre-chowns `/data`.
 
 ## Layout
 

@@ -1,5 +1,6 @@
 # Local data volume contents and build output
 /_data/
+/data/
 /pdf-foss-demo
 /pdf-foss-demo.exe
 *.test
