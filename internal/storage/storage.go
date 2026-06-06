@@ -23,21 +23,22 @@ const (
 
 // RenderError captures a failure during parse/render so it survives in meta.json.
 type RenderError struct {
-	Stage   string `json:"stage"`             // "parse" | "render" | "write"
-	Page    int    `json:"page,omitempty"`    // 1-based page, when applicable
-	Message string `json:"message"`           // full library error or panic + stack
+	Stage   string `json:"stage"`          // "parse" | "render" | "write"
+	Page    int    `json:"page,omitempty"` // 1-based page, when applicable
+	Message string `json:"message"`        // full library error or panic + stack
 }
 
 // Meta is the persisted record for one uploaded file.
 type Meta struct {
-	ID           string       `json:"id"`
-	OriginalName string       `json:"originalName"`
-	Size         int64        `json:"size"`
-	UploadedAt   string       `json:"uploadedAt"`
-	Status       string       `json:"status"`
-	Pages        int          `json:"pages,omitempty"`
-	RenderedAt   string       `json:"renderedAt,omitempty"`
-	Error        *RenderError `json:"error,omitempty"`
+	ID            string       `json:"id"`
+	OriginalName  string       `json:"originalName"`
+	Size          int64        `json:"size"`
+	UploadedAt    string       `json:"uploadedAt"`
+	Status        string       `json:"status"`
+	Pages         int          `json:"pages,omitempty"`         // total pages in the document
+	RenderedPages int          `json:"renderedPages,omitempty"` // pages actually rendered to PNG (capped)
+	RenderedAt    string       `json:"renderedAt,omitempty"`
+	Error         *RenderError `json:"error,omitempty"`
 }
 
 // Store is rooted at the volume mount (e.g. /data).

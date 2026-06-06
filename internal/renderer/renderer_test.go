@@ -81,3 +81,64 @@ func TestRenderCorruptRecordsErrorAndKeepsOriginal(t *testing.T) {
 		t.Fatalf("original was removed: %v", err)
 	}
 }
+
+// makePDFPages builds a real n-page PDF and returns its bytes.
+func makePDFPages(t *testing.T, n int) []byte {
+	t.Helper()
+	doc := asposepdf.NewDocumentFromFormat(asposepdf.PageFormatA4)
+	for i := 2; i <= n; i++ {
+		if err := doc.AddBlankPageFromFormat(asposepdf.PageFormatA4); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tmp := t.TempDir() + "/in.pdf"
+	if err := doc.Save(tmp); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestRenderCapsAtMaxPages(t *testing.T) {
+	s := storage.New(t.TempDir())
+	id, err := s.CreateUpload("big.pdf", makePDFPages(t, 13))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := New(s).Render(id); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	m, _ := s.ReadMeta(id)
+	if m.Status != storage.StatusReady {
+		t.Fatalf("status = %q, err=%+v", m.Status, m.Error)
+	}
+	// Full page count is recorded, but only the first maxRenderPages are rendered.
+	if m.Pages != 13 {
+		t.Fatalf("pages = %d, want 13", m.Pages)
+	}
+	if m.RenderedPages != maxRenderPages {
+		t.Fatalf("renderedPages = %d, want %d", m.RenderedPages, maxRenderPages)
+	}
+	// PNGs 1..10 exist; 11 does not.
+	if _, err := os.Stat(s.PagePNGPath(id, maxRenderPages)); err != nil {
+		t.Fatalf("missing png %d: %v", maxRenderPages, err)
+	}
+	if _, err := os.Stat(s.PagePNGPath(id, maxRenderPages+1)); err == nil {
+		t.Fatalf("png %d should not exist (over cap)", maxRenderPages+1)
+	}
+}
+
+func TestRenderSmallSetsRenderedPagesToTotal(t *testing.T) {
+	s := storage.New(t.TempDir())
+	id, _ := s.CreateUpload("small.pdf", makePDFPages(t, 3))
+	if err := New(s).Render(id); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	m, _ := s.ReadMeta(id)
+	if m.Pages != 3 || m.RenderedPages != 3 {
+		t.Fatalf("pages=%d renderedPages=%d, want 3/3", m.Pages, m.RenderedPages)
+	}
+}

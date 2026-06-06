@@ -15,6 +15,11 @@ import (
 
 const dpi = 150.0
 
+// maxRenderPages caps how many pages are rasterized per document. The full page
+// count is still recorded in meta.Pages; only the first maxRenderPages are
+// rendered to PNG (meta.RenderedPages), and the viewer notes the remainder.
+const maxRenderPages = 10
+
 type Renderer struct {
 	store *storage.Store
 	sem   chan struct{} // capacity 1: one render at a time
@@ -94,11 +99,18 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 	pages := doc.PageCount()
 	m.Pages = pages
 
+	// Cap rasterization to the first maxRenderPages; record how many we render.
+	toRender := pages
+	if toRender > maxRenderPages {
+		toRender = maxRenderPages
+	}
+	m.RenderedPages = toRender
+
 	if err := os.MkdirAll(r.store.PagesDir(id), 0o755); err != nil {
 		return &storage.RenderError{Stage: "write", Message: err.Error()}
 	}
 
-	for n := 1; n <= pages; n++ {
+	for n := 1; n <= toRender; n++ {
 		panicPage = n // so a panic inside the loop is attributed to this page
 		page, err := doc.Page(n)
 		if err != nil {
