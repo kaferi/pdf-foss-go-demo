@@ -8,6 +8,7 @@ async function initApp() {
   const input = document.getElementById('file-input');
   btn.addEventListener('click', () => input.click());
   input.addEventListener('change', () => uploadFiles(Array.from(input.files)));
+  document.getElementById('rerender').addEventListener('click', rerenderCurrent);
 
   // Back/forward navigation between / and /view/{id}.
   window.addEventListener('popstate', () => openFromLocation(false));
@@ -213,12 +214,30 @@ function setDownload(id) {
   const a = document.getElementById('download');
   a.href = `/files/${id}/original.pdf`;
   a.hidden = false;
+  document.getElementById('rerender').hidden = false;
 }
 function showPlaceholder() {
   setTitle('Select a document');
   document.getElementById('download').hidden = true;
+  document.getElementById('rerender').hidden = true;
   document.getElementById('detail-body').innerHTML =
     `<div class="placeholder"><p>Pick a file on the left, or upload a new PDF to render its pages.</p></div>`;
+}
+
+// rerenderCurrent forces a fresh render of the selected file, then polls.
+async function rerenderCurrent() {
+  const id = currentId;
+  if (!id) return;
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  const btn = document.getElementById('rerender');
+  btn.disabled = true;
+  showSpinner('Re-rendering…');
+  try {
+    await fetch('/api/files/' + id + '/rerender', { method: 'POST' });
+  } catch { /* fall through to polling, which surfaces the outcome */ }
+  if (id !== currentId) { btn.disabled = false; return; }
+  pollUntilDone(id);
+  btn.disabled = false;
 }
 function showStatus(text) {
   document.getElementById('detail-body').innerHTML =

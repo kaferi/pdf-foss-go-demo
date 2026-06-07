@@ -124,17 +124,19 @@ body { background: var(--bg); }
   border-bottom: 1px solid var(--border);
 }
 .doc-title {
+  margin-right: auto; /* push the action buttons to the right */
   font-weight: 600; font-size: .95rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .btn-ghost {
-  margin-left: auto; flex: none;
+  flex: none; cursor: pointer;
   font-size: .83rem; font-weight: 600; text-decoration: none;
   color: var(--accent); background: var(--accent-soft);
-  padding: .4rem .7rem; border-radius: 7px;
+  border: none; padding: .4rem .7rem; border-radius: 7px;
   transition: background .12s;
 }
 .btn-ghost:hover { background: #e0e7ff; }
+.btn-ghost[disabled] { opacity: .5; cursor: default; }
 
 .detail-body { flex: 1; overflow-y: auto; min-height: 0; }
 
