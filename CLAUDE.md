@@ -18,6 +18,16 @@ The dependency is pinned to the latest `main` branch commit (not the `v0.2.0`
 tag) because raster rendering (`Page.RenderPNG` / `Page.RenderImage`) exists in
 `main` but not in the tagged release.
 
+## Repository: standalone, not embedded in the library
+
+This project lives in its own repository and consumes the library as an external
+Go module — it is intentionally NOT vendored into the aspose-pdf-foss-for-go repo
+(even though the same team owns the library). The point is test honesty: the demo
+exercises the library exactly as a real third-party user would (`go get` + a
+pinned pseudo-version, public API only), so "works in the demo = works for users"
+with no `replace`-mode escape hatch. To test a fresh library commit, bump the
+dependency (`go get …@main`) and rebuild.
+
 ## Decisions so far
 
 - **Storage:** single Docker volume mounted at `/data`. Global shared pool — all
