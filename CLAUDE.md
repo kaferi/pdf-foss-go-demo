@@ -74,6 +74,10 @@ dependency (`go get …@main`) and rebuild.
     message}`. The record stays in the list forever (until manual delete).
   - `POST /api/upload` / render endpoints return full error detail to the screen.
   - File page has a "Download original PDF" button (works for errored files too).
+  - A document that opens but reports `PageCount()==0` is recorded as an error
+    (not a silent empty "ready"). This caught a real library bug:
+    `OpenWithPassword` can accept a wrong/empty password and return an empty
+    document instead of failing.
 - **meta.json status lifecycle:** `uploaded` → `rendering` → `ready` | `error`.
 - **List + delete:** home page lists all files; delete removes the whole
   `/data/<fileId>` folder.
