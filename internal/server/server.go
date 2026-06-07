@@ -169,11 +169,13 @@ func (s *Server) handleOriginal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")
-	// FormatMediaType quotes/escapes the filename per RFC 6266, preventing header
-	// injection via crafted names (e.g. an embedded double-quote).
-	disp := mime.FormatMediaType("attachment", map[string]string{"filename": m.OriginalName})
+	// "inline" so the browser opens the PDF in its built-in viewer (new tab)
+	// instead of downloading it. The filename hint is still used if the user
+	// saves from the viewer. FormatMediaType quotes/escapes the filename per
+	// RFC 6266, preventing header injection via crafted names.
+	disp := mime.FormatMediaType("inline", map[string]string{"filename": m.OriginalName})
 	if disp == "" {
-		disp = "attachment"
+		disp = "inline"
 	}
 	w.Header().Set("Content-Disposition", disp)
 	http.ServeFile(w, r, s.store.OriginalPath(id))

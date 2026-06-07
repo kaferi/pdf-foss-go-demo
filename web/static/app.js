@@ -155,7 +155,7 @@ function showError(meta) {
       `<p class="meta-line"><b>Stage:</b> ${escapeHtml(e.stage || '?')}` +
       (e.page ? ` · <b>Page:</b> ${e.page}` : '') + `</p>` +
       `<pre>${escapeHtml(e.message || '(no message)')}</pre>` +
-      `<p><a href="/files/${meta.id}/original.pdf">Download original PDF</a> to reproduce.</p>` +
+      `<p><a href="/files/${meta.id}/original.pdf" target="_blank" rel="noopener">Open original PDF</a> to reproduce.</p>` +
     `</div>`;
 }
 
