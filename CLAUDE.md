@@ -47,6 +47,12 @@ dependency (`go get …@main`) and rebuild.
   POSTs them to `/api/upload` one at a time (the endpoint still takes a single
   file), shows per-file progress, refreshes the list as each lands, and reports
   per-file failures without aborting the batch.
+- **Encrypted PDFs** are unlocked automatically with a fixed set of test
+  passwords (`""`, `"testpassword"`, `"password"`, `"pass"`). On `ErrEncrypted`,
+  the renderer retries `OpenWithPassword` with each in order; the empty password
+  is first (also covers owner-only encryption). `meta.Encrypted` and
+  `meta.UnlockedWith` are recorded and the UI shows a 🔓 unlocked badge. If none
+  match, it fails as a parse-stage error with the original kept.
 - **One render at a time** (global semaphore = 1) — memory is the bottleneck;
   only one file is open in the library at any moment.
 - **Render UX:** selecting a file shows a "Rendering… (N pages)" page that polls
