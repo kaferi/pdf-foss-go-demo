@@ -146,3 +146,7 @@ func (s *Store) List() ([]Meta, error) {
 
 // Delete removes the entire directory for the given file ID.
 func (s *Store) Delete(id string) error { return os.RemoveAll(s.dir(id)) }
+
+// RemovePages deletes the cached page PNGs for the given file ID (the original
+// and meta.json are kept). Used before a forced re-render.
+func (s *Store) RemovePages(id string) error { return os.RemoveAll(s.PagesDir(id)) }

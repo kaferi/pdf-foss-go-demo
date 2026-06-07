@@ -206,3 +206,61 @@ func TestRenderSmallSetsRenderedPagesToTotal(t *testing.T) {
 		t.Fatalf("pages=%d renderedPages=%d, want 3/3", m.Pages, m.RenderedPages)
 	}
 }
+
+func TestRerenderRebuildsPNGs(t *testing.T) {
+	s := storage.New(t.TempDir())
+	id, _ := s.CreateUpload("doc.pdf", makePDFPages(t, 2))
+	r := New(s)
+	if err := r.Render(id); err != nil {
+		t.Fatal(err)
+	}
+	// Plant a stray page PNG that a fresh render must not leave behind.
+	stray := s.PagePNGPath(id, 99)
+	if err := os.WriteFile(stray, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Rerender(id); err != nil {
+		t.Fatalf("Rerender: %v", err)
+	}
+	m, _ := s.ReadMeta(id)
+	if m.Status != storage.StatusReady {
+		t.Fatalf("status = %q, err=%+v", m.Status, m.Error)
+	}
+	if m.Pages != 2 || m.RenderedPages != 2 {
+		t.Fatalf("pages=%d renderedPages=%d, want 2/2", m.Pages, m.RenderedPages)
+	}
+	// Real pages exist again; the stray page was removed by the pages-dir wipe.
+	for n := 1; n <= 2; n++ {
+		if _, err := os.Stat(s.PagePNGPath(id, n)); err != nil {
+			t.Fatalf("missing page %d after rerender: %v", n, err)
+		}
+	}
+	if _, err := os.Stat(stray); err == nil {
+		t.Fatalf("stray page %s should have been removed", stray)
+	}
+}
+
+func TestRerenderRetriesErroredFile(t *testing.T) {
+	s := storage.New(t.TempDir())
+	id, _ := s.CreateUpload("broken.pdf", []byte("%PDF-1.7 not a pdf"))
+	r := New(s)
+	if err := r.Render(id); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.ReadMeta(id); m.Status != storage.StatusError {
+		t.Fatalf("precondition: want error status, got %q", m.Status)
+	}
+	// Rerender on an errored file should re-attempt and end in error again,
+	// with the original still present.
+	if err := r.Rerender(id); err != nil {
+		t.Fatalf("Rerender returned storage error: %v", err)
+	}
+	m, _ := s.ReadMeta(id)
+	if m.Status != storage.StatusError {
+		t.Fatalf("status = %q, want error", m.Status)
+	}
+	if _, err := os.Stat(s.OriginalPath(id)); err != nil {
+		t.Fatalf("original was removed: %v", err)
+	}
+}

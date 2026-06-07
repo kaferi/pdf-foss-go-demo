@@ -44,6 +44,7 @@ func New(s *storage.Store, r *renderer.Renderer, webDir string) *Server {
 	srv.mux.HandleFunc("POST /api/upload", srv.handleUpload)
 	srv.mux.HandleFunc("GET /api/files/{id}", srv.handleFileMeta)
 	srv.mux.HandleFunc("POST /api/files/{id}/render", srv.handleRender)
+	srv.mux.HandleFunc("POST /api/files/{id}/rerender", srv.handleRerender)
 	srv.mux.HandleFunc("DELETE /api/files/{id}", srv.handleDelete)
 	srv.mux.HandleFunc("GET /files/{id}/original.pdf", srv.handleOriginal)
 	srv.mux.HandleFunc("GET /files/{id}/pages/{n}", srv.handlePagePNG)
@@ -133,6 +134,26 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.renderer.Render(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	m, _ := s.store.ReadMeta(id)
+	writeJSON(w, http.StatusOK, m) // status may be "ready" or "error"
+}
+
+// handleRerender forces a fresh render even for an already-rendered file (used
+// to re-check a file against a new library build).
+func (s *Server) handleRerender(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !validID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := s.store.ReadMeta(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.renderer.Rerender(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -80,6 +80,34 @@ func (r *Renderer) Render(id string) error {
 	return r.store.WriteMeta(m)
 }
 
+// Rerender forces a fresh render even if the file is already "ready": it deletes
+// the cached PNGs, clears the rendered state in meta, then renders again. This is
+// for re-checking a file against a new library build while fixing bugs. Like
+// Render, PDF failures are reported via meta status, not the return value.
+func (r *Renderer) Rerender(id string) error {
+	m, err := r.store.ReadMeta(id)
+	if err != nil {
+		return err
+	}
+	// Drop cached PNGs so a now-shorter render can't leave stale pages behind.
+	if err := r.store.RemovePages(id); err != nil {
+		return err
+	}
+	// Reset every render-derived field back to the pre-render state.
+	m.Status = storage.StatusUploaded
+	m.Pages = 0
+	m.RenderedPages = 0
+	m.RenderedAt = ""
+	m.Encrypted = false
+	m.UnlockedWith = ""
+	m.Error = nil
+	if err := r.store.WriteMeta(m); err != nil {
+		return err
+	}
+	// Render re-acquires the semaphore and proceeds because status is "uploaded".
+	return r.Render(id)
+}
+
 // renderAllPages opens the document and writes one PNG per page. Any panic from
 // the library is recovered and returned as a *storage.RenderError with a stack.
 func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.RenderError) {

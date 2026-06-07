@@ -174,6 +174,31 @@ func TestRenderUnknown404(t *testing.T) {
 	}
 }
 
+// TestRerenderEndpoint covers the forced re-render trigger: 404 for an unknown
+// id, and 200 with a meta JSON for an existing file.
+func TestRerenderEndpoint(t *testing.T) {
+	srv, s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/files/"+strings.Repeat("a", 32)+"/rerender", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 404 {
+		t.Fatalf("unknown id code = %d, want 404", w.Code)
+	}
+
+	id, _ := s.CreateUpload("a.pdf", []byte("%PDF-1.7 x"))
+	req = httptest.NewRequest(http.MethodPost, "/api/files/"+id+"/rerender", nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("rerender code = %d body=%s", w.Code, w.Body.String())
+	}
+	var m storage.Meta
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil || m.ID != id {
+		t.Fatalf("meta body = %s", w.Body.String())
+	}
+}
+
 // TestPathTraversalRejected verifies that a crafted id containing an
 // (URL-encoded) path separator cannot escape the data volume. The DELETE path
 // is the dangerous one: without the validID guard it would remove an arbitrary
