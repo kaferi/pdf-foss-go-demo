@@ -35,10 +35,12 @@ async function loadFiles() {
     card.dataset.id = f.id;
 
     const pages = f.pages ? ` · ${f.pages}p` : '';
+    const lock = f.encrypted ? `<span class="badge unlocked" title="Opened with a test password">🔓 unlocked</span>` : '';
     card.innerHTML =
       `<span class="file-name">${escapeHtml(f.originalName)}</span>` +
       `<span class="file-sub">` +
         `<span class="badge ${f.status}">${f.status}</span>` +
+        lock +
         `<span>${(f.size / 1024).toFixed(0)} KB${pages}</span>` +
       `</span>` +
       `<button class="del" title="Delete" aria-label="Delete">×</button>`;
@@ -85,7 +87,7 @@ async function selectFile(id, push) {
   if (!meta || !meta.id) { setTitle('Not found'); showStatus('File not found.'); return; }
   if (id !== currentId) return; // selection changed while awaiting
 
-  setTitle(meta.originalName);
+  setTitle(meta.originalName, meta);
 
   if (meta.status === 'uploaded') {
     showSpinner('Starting render…');
@@ -194,7 +196,19 @@ async function uploadFiles(files) {
 function navigate(path) {
   if (location.pathname !== path) history.pushState(null, '', path);
 }
-function setTitle(t) { document.getElementById('doc-title').textContent = t; }
+function setTitle(t, meta) {
+  const el = document.getElementById('doc-title');
+  el.textContent = t;
+  if (meta && meta.encrypted) {
+    const chip = document.createElement('span');
+    chip.className = 'badge unlocked';
+    const pw = meta.unlockedWith ? `"${meta.unlockedWith}"` : 'empty password';
+    chip.title = `Encrypted PDF opened with test password: ${pw}`;
+    chip.textContent = '🔓 unlocked';
+    el.appendChild(document.createTextNode(' '));
+    el.appendChild(chip);
+  }
+}
 function setDownload(id) {
   const a = document.getElementById('download');
   a.href = `/files/${id}/original.pdf`;

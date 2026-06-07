@@ -99,6 +99,7 @@ body { background: var(--bg); }
 .badge.ready { background: var(--ok-soft); color: var(--ok); }
 .badge.error { background: var(--err-soft); color: var(--err); }
 .badge.rendering, .badge.uploaded { background: var(--warn-soft); color: var(--warn); }
+.badge.unlocked { background: var(--accent-soft); color: var(--accent); text-transform: none; letter-spacing: 0; }
 
 .del {
   position: absolute; top: .5rem; right: .5rem;
