@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	asposepdf "github.com/aspose-pdf-foss/aspose-pdf-foss-for-go"
@@ -56,6 +57,23 @@ func TestRenderReadyProducesPNGs(t *testing.T) {
 		if _, err := os.Stat(s.PagePNGPath(id, n)); err != nil {
 			t.Fatalf("missing png %d: %v", n, err)
 		}
+	}
+}
+
+func TestZeroPageError(t *testing.T) {
+	if zeroPageError(3, false) != nil {
+		t.Fatal("3 pages should not be an error")
+	}
+	if zeroPageError(1, true) != nil {
+		t.Fatal("1 page should not be an error")
+	}
+	e := zeroPageError(0, false)
+	if e == nil || e.Stage != "parse" {
+		t.Fatalf("0 pages should be a parse error, got %+v", e)
+	}
+	enc := zeroPageError(0, true)
+	if enc == nil || !strings.Contains(enc.Message, "encrypted") {
+		t.Fatalf("0-page encrypted error should mention encryption, got %+v", enc)
 	}
 }
 

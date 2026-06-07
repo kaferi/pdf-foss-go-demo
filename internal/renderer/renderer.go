@@ -136,6 +136,14 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 	pages := doc.PageCount()
 	m.Pages = pages
 
+	// A document that opens but reports zero pages is treated as an error rather
+	// than a silently-empty "ready". For an encrypted file this typically means
+	// the library accepted a wrong/empty password and returned an empty document
+	// instead of failing — exactly the kind of bug this harness exists to surface.
+	if zerr := zeroPageError(pages, encrypted); zerr != nil {
+		return zerr
+	}
+
 	// Cap rasterization to the first maxRenderPages; record how many we render.
 	toRender := pages
 	if toRender > maxRenderPages {
@@ -166,6 +174,20 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 		}
 	}
 	return nil
+}
+
+// zeroPageError returns a parse-stage RenderError when a document opened but
+// reports no pages, and nil otherwise. Kept separate so the decision is unit
+// testable without forging a (disallowed) zero-page PDF.
+func zeroPageError(pages int, encrypted bool) *storage.RenderError {
+	if pages > 0 {
+		return nil
+	}
+	msg := "document opened but reports 0 pages"
+	if encrypted {
+		msg += " (encrypted: a test password may have been wrongly accepted)"
+	}
+	return &storage.RenderError{Stage: "parse", Message: msg}
 }
 
 // openDocument opens the PDF, transparently handling encryption. If the plain
