@@ -140,7 +140,16 @@ func (s *Store) List() ([]Meta, error) {
 		}
 		out = append(out, m)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UploadedAt > out[j].UploadedAt })
+	// Newest upload first, with ID as a deterministic tiebreaker. Many files can
+	// share the same UploadedAt (a multi-file upload stamps them within the same
+	// second), so without the tiebreaker their relative order would be undefined
+	// and could shuffle when an unrelated file is deleted.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].UploadedAt != out[j].UploadedAt {
+			return out[i].UploadedAt > out[j].UploadedAt
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out, nil
 }
 
