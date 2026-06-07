@@ -57,6 +57,10 @@ dependency (`go get …@main`) and rebuild.
   only one file is open in the library at any moment.
 - **Render UX:** selecting a file shows a "Rendering… (N pages)" page that polls
   status, then transitions to the viewer when `ready`.
+- **Force re-render:** `POST /api/files/{id}/rerender` (Renderer.Rerender) clears
+  the cached PNGs, resets the render-derived meta fields, and renders again — for
+  re-checking a `ready`/`error` file against a new library build. A "↻ Re-render"
+  button in the viewer triggers it. Plain `/render` stays idempotent.
 - **Viewer:** vertically scrolling, Acrobat-style. Page `<img>`s use native
   `loading="lazy"` so the browser only fetches PNGs as they scroll into view.
 - **Frontend:** plain HTML/CSS/JS, no framework, no build step, no Node. Go
