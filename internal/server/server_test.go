@@ -156,6 +156,9 @@ func TestHomeAndViewServeHTML(t *testing.T) {
 		if !strings.Contains(w.Body.String(), "<html") {
 			t.Fatalf("%s did not serve HTML: %s", path, w.Body.String())
 		}
+		if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Fatalf("%s Cache-Control = %q, want no-cache", path, cc)
+		}
 	}
 }
 

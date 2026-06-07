@@ -47,8 +47,8 @@ func New(s *storage.Store, r *renderer.Renderer, webDir string) *Server {
 	srv.mux.HandleFunc("DELETE /api/files/{id}", srv.handleDelete)
 	srv.mux.HandleFunc("GET /files/{id}/original.pdf", srv.handleOriginal)
 	srv.mux.HandleFunc("GET /files/{id}/pages/{n}", srv.handlePagePNG)
-	srv.mux.Handle("GET /static/", http.StripPrefix("/static/",
-		http.FileServer(http.Dir(webDir+"/static"))))
+	srv.mux.Handle("GET /static/", noCacheHandler(http.StripPrefix("/static/",
+		http.FileServer(http.Dir(webDir+"/static")))))
 	return srv
 }
 
@@ -202,5 +202,22 @@ func (s *Server) handlePagePNG(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
+	noCache(w)
 	http.ServeFile(w, r, s.webDir+"/index.html")
+}
+
+// noCache tells the browser it may store the response but must revalidate it
+// before reuse. Combined with the ETag/Last-Modified that ServeFile/FileServer
+// already emit, an unchanged asset returns a cheap 304, but a rebuilt index.html
+// or app.js is picked up immediately — no manual hard-reload needed.
+func noCache(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-cache")
+}
+
+// noCacheHandler wraps h so every response carries the no-cache header.
+func noCacheHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		noCache(w)
+		h.ServeHTTP(w, r)
+	})
 }
