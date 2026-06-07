@@ -4,6 +4,7 @@
 package renderer
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -19,6 +20,12 @@ const dpi = 150.0
 // count is still recorded in meta.Pages; only the first maxRenderPages are
 // rendered to PNG (meta.RenderedPages), and the viewer notes the remainder.
 const maxRenderPages = 10
+
+// testPasswords are tried in order when a PDF is encrypted. This is a demo/test
+// harness, so we attempt a small fixed set rather than asking the user. The
+// empty string is first: it also covers files encrypted with only an owner
+// password (empty user password).
+var testPasswords = []string{"", "testpassword", "password", "pass"}
 
 type Renderer struct {
 	store *storage.Store
@@ -90,10 +97,12 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 		}
 	}()
 
-	doc, err := asposepdf.Open(r.store.OriginalPath(id))
+	doc, encrypted, unlockedWith, err := openDocument(r.store.OriginalPath(id))
 	if err != nil {
 		return &storage.RenderError{Stage: "parse", Message: err.Error()}
 	}
+	m.Encrypted = encrypted
+	m.UnlockedWith = unlockedWith
 	stage = "render"
 
 	pages := doc.PageCount()
@@ -129,4 +138,27 @@ func (r *Renderer) renderAllPages(id string, m *storage.Meta) (rerr *storage.Ren
 		}
 	}
 	return nil
+}
+
+// openDocument opens the PDF, transparently handling encryption. If the plain
+// Open reports the file is encrypted, it retries with each testPasswords entry
+// in order and uses the first that succeeds. Returns the document, whether it
+// was encrypted, and which test password unlocked it ("" for the empty password
+// or for non-encrypted files).
+func openDocument(path string) (doc *asposepdf.Document, encrypted bool, unlockedWith string, err error) {
+	doc, err = asposepdf.Open(path)
+	if err == nil {
+		return doc, false, "", nil
+	}
+	if !errors.Is(err, asposepdf.ErrEncrypted) {
+		return nil, false, "", err
+	}
+	// Encrypted: try the known test passwords.
+	for _, pw := range testPasswords {
+		d, perr := asposepdf.OpenWithPassword(path, pw)
+		if perr == nil {
+			return d, true, pw, nil
+		}
+	}
+	return nil, true, "", fmt.Errorf("PDF is encrypted; none of the %d test passwords matched", len(testPasswords))
 }

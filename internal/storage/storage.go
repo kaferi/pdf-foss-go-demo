@@ -38,6 +38,8 @@ type Meta struct {
 	Pages         int          `json:"pages,omitempty"`         // total pages in the document
 	RenderedPages int          `json:"renderedPages,omitempty"` // pages actually rendered to PNG (capped)
 	RenderedAt    string       `json:"renderedAt,omitempty"`
+	Encrypted     bool         `json:"encrypted,omitempty"`    // the PDF was password-protected
+	UnlockedWith  string       `json:"unlockedWith,omitempty"` // the test password that opened it ("" = empty password)
 	Error         *RenderError `json:"error,omitempty"`
 }
 
